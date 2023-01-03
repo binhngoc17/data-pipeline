@@ -38,8 +38,7 @@ class TrustSourceMerger:
                     data[key] = list({v["link"]: v for v in val}.values())
             elif isinstance(val, dict):
                 self.handle_unique_list(data[key])
-            else:
-                pass
 
     def save(self, store, data):
+        store.delete_hotel(data['id'])
         store.save_raw_data(store.merge_data_table, [data])

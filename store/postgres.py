@@ -130,7 +130,7 @@ class Postgres:
             """,
             f"""
             CREATE TABLE IF NOT EXISTS {self.merge_data_table} (
-                id VARCHAR ( 255 ),
+                id VARCHAR ( 255 ) PRIMARY KEY,
                 destination_id INT,
                 name VARCHAR ( 255 ),
                 location JSON,
@@ -140,6 +140,7 @@ class Postgres:
                 booking_conditions JSON
             )
             """,
+            f"""CREATE INDEX IF NOT EXISTS idx_destination_id ON {self.merge_data_table} (destination_id);"""
         )
         try:
             conn = self.connect_db()
@@ -156,3 +157,76 @@ class Postgres:
         finally:
             if conn is not None:
                 conn.close()
+
+    def get_by_hotel_ids(self, hotel_ids):
+        command = f"""SELECT * FROM {self.merge_data_table} WHERE id IN %s"""
+        try:
+            conn = self.connect_db()
+            cur = conn.cursor()
+
+            cur.execute(command, (tuple(hotel_ids),))
+            values = cur.fetchall()
+            
+            return self.convert_table_to_dict(cur, values)   
+        except (Exception, psycopg2.DatabaseError) as error:
+            print(error)
+        finally:
+            if conn is not None:
+                conn.close()
+
+    def get_by_destination_id(self, destination_id):
+        command = f"""SELECT * FROM {self.merge_data_table} WHERE destination_id = %s"""
+        try:
+            conn = self.connect_db()
+            cur = conn.cursor()
+
+            cur.execute(command, (destination_id,))
+            values = cur.fetchall()
+            
+            return self.convert_table_to_dict(cur, values)   
+        except (Exception, psycopg2.DatabaseError) as error:
+            print(error)
+        finally:
+            if conn is not None:
+                conn.close()
+
+    def convert_table_to_dict(self, cur, values):
+        temp = []
+        for x in values:
+            temp2 = {}
+            c = 0
+            for col in cur.description:
+                temp2.update({str(col[0]): x[c]})
+                c = c+1
+            temp.append(temp2)
+        return temp
+    
+    def delete_hotel(self, hotel_id):
+        command = f"""DELETE FROM {self.merge_data_table} WHERE id = %s"""
+        try:
+            conn = self.connect_db()
+            cur = conn.cursor()
+
+            cur.execute(command, (hotel_id,))
+
+            # close communication with the PostgreSQL database server
+            cur.close()
+            # commit the changes
+            conn.commit()             
+        except (Exception, psycopg2.DatabaseError) as error:
+            print(error)
+        finally:
+            if conn is not None:
+                conn.close()
+
+postgres = Postgres(
+    {
+        'db': 'pipeline',
+        'host': '18.139.210.185',
+        'user': 'ngoc',
+        'password': 'password',
+        'merge_data_table': 'merge_data',
+        'process_data_table': 'process_data',
+        'raw_data_table': 'raw_data',
+    }
+)

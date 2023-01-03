@@ -80,7 +80,7 @@ class FieldTransformer:
         if transformed_item.get('amenities'):
             for key in ['room', 'general']:
                 if transformed_item['amenities'].get(key):
-                    transformed_item['amenities'][key] = [item.strip() for item in transformed_item['amenities'][key]]
+                    transformed_item['amenities'][key] = [item.strip().capitalize() for item in transformed_item['amenities'][key]]
 
         # remove empty space in the descriptions of images
         if transformed_item.get('images'):

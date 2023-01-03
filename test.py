@@ -2,7 +2,13 @@ import unittest
 from psycopg2 import DatabaseError
 from store.postgres import Postgres
 from merger.trust_source_merger import TrustSourceMerger
-
+from loader.rest_api_loader import (
+    acme_data_loader,
+    patagonia_data_loader,
+    paperflies_data_loader,
+)
+from transformer.field_transformer import acme_transformer, patagonia_transformer, paperflies_transformer
+from merger.priority_merger import v1_priority_merger
 
 class Testing(unittest.TestCase):
     def setUp(self) -> None:
@@ -204,3 +210,145 @@ class Testing(unittest.TestCase):
             result = self.trust_source_merger.merge(self.acme, self.patagonia, self.paperflies)
             result['destination_id'] = "abc"
             self.trust_source_merger.save(postgres, result)
+
+    def test_transformer_acme(self):
+        # Acme
+        key_for_acme = ('id' ,'destination_id' ,'name' ,'location' ,'description' ,'amenities')
+        transformed_acme_datas = acme_transformer.convert(acme_data_loader.get_data())
+
+        for transformed_acme_data in transformed_acme_datas:
+            for key in key_for_acme:
+                self.assertIn(key, transformed_acme_data)
+                self.assertIsNotNone(transformed_acme_data[key])
+
+                if key == 'location': 
+                    for key_location in ('lat', 'lng', 'address', 'city', 'country'):
+                        self.assertIn(key_location, transformed_acme_data['location'])
+
+                if key == 'amenities': 
+                    # Check item in list remove empty space
+                    self.assertIn('general', transformed_acme_data['amenities'])
+                    for amenity in transformed_acme_data['amenities']['general']:
+                        self.assertEqual(amenity, amenity.strip())
+
+    def test_transformer_patagonia(self):
+        # Patagonia
+        key_for_patagonia = ('id','destination_id','name','location','description','amenities','images')
+        transformed_patagonia_datas = patagonia_transformer.convert(patagonia_data_loader.get_data())
+        
+        for transformed_patagonia_data in transformed_patagonia_datas:
+            for key in key_for_patagonia:
+                self.assertIn(key, transformed_patagonia_data)
+                if key != 'description':
+                    self.assertIsNotNone(transformed_patagonia_data[key])
+
+                if key == 'location': 
+                    for key_location in ('lat', 'lng', 'address'):
+                        self.assertIn(key_location, transformed_patagonia_data['location'])
+
+                if key == 'amenities': 
+                    # Check item in list remove empty space
+                    if not transformed_patagonia_data['amenities'].get('room'):
+                        continue
+                    for amenity in transformed_patagonia_data['amenities']['room']:
+                        self.assertEqual(amenity, amenity.strip())
+
+                if key == 'images': 
+                    for key in transformed_patagonia_data['images']:
+                        self.assertIn(key, transformed_patagonia_data['images'])
+                        self.assertGreater(len(transformed_patagonia_data['images'][key]), 0)
+
+                        for data in transformed_patagonia_data['images'][key]:
+                            self.assertIn('link', data)
+                            self.assertIsNotNone(data['link'])
+
+                            self.assertIn('description', data)
+                            self.assertIsNotNone(data['description'])
+
+    def test_transformer_paperflies(self):
+        # Paperflies
+        key_for_paperflies = ("id","destination_id","name","location","description","amenities","images","booking_conditions")
+        transformed_paperflies_datas = paperflies_transformer.convert(paperflies_data_loader.get_data())
+       
+        for transformed_paperflies_data in transformed_paperflies_datas:
+            for key in key_for_paperflies:
+                self.assertIn(key, transformed_paperflies_data)
+                self.assertIsNotNone(transformed_paperflies_data[key])
+
+                if key == 'location':
+                    for key_location in ('address', 'country'):
+                        self.assertIn(key_location, transformed_paperflies_data['location'])
+                        self.assertIsNotNone(transformed_paperflies_data['location'][key_location])
+
+                if key == 'amenities': 
+                    # Check item in list remove empty space
+                    self.assertIn('room', transformed_paperflies_data['amenities'])
+                    for amenity in transformed_paperflies_data['amenities']['room']:
+                        self.assertEqual(amenity, amenity.strip())
+
+                    self.assertIn('general', transformed_paperflies_data['amenities'])
+                    for amenity in transformed_paperflies_data['amenities']['general']:
+                        self.assertEqual(amenity, amenity.strip())
+
+                if key == 'booking_conditions': 
+                    # Check item in list remove empty space
+                    for booking_condition in transformed_paperflies_data['booking_conditions']:
+                        self.assertEqual(booking_condition, booking_condition.strip())
+                
+                if key == 'images': 
+                    for key in transformed_paperflies_data['images']:
+                        self.assertIn(key, transformed_paperflies_data['images'])
+                        self.assertGreater(len(transformed_paperflies_data['images'][key]), 0)
+
+                        for data in transformed_paperflies_data['images'][key]:
+                            self.assertIn('link', data)
+                            self.assertIsNotNone(data['link'])
+
+                            self.assertIn('description', data)
+                            self.assertIsNotNone(data['description'])
+
+    def test_merge_sources_with_class_priority_merger(self):
+        result = v1_priority_merger.merge(self.acme['id'], {'paperflies': self.paperflies, 'patagonia': self.patagonia, 'acme': self.acme})
+
+        for key in self.trust_source_merger.rule:
+            self.assertIn(key, result)
+            self.assertIsNotNone(result[key])
+
+        # assert get field location.contry from acme if patagonia and paperflies has not it
+        self.assertDictEqual(result['location'], self.acme['location'])
+
+        # assert get field country from acme if patagonia and paperflies has not it
+        self.assertEqual(result['location']['country'], self.acme['location']['country'])
+
+        # assert get field booking_conditions from paperflies  if patagonia and paperflies has not it
+        self.assertCountEqual(result['booking_conditions'], self.paperflies['booking_conditions'])
+
+        # assert get field amenities.general from acme and paperflies if patagonia has not it
+        self.assertLessEqual(
+            len(result['amenities']['general']),
+            len(self.paperflies['amenities']['general'] + self.acme['amenities']['general'])
+        )
+
+        # assert get field amenities.room from patagonia and paperflies if acme has not it
+        self.assertLessEqual(
+            len(result['amenities']['room']),
+            len(self.paperflies['amenities']['room'] + self.patagonia['amenities']['room'])
+        )
+
+        # assert get field images.rooms from patagonia and paperflies if acme has not it
+        self.assertLessEqual(
+            len(result['images']['rooms']),
+            len(self.paperflies['images']['rooms'] + self.patagonia['images']['rooms'])
+        )
+
+        # assert get field images.amenities from patagonia if acme and paperflies has not it
+        self.assertLessEqual(
+            len(result['images']['amenities']),
+            len(self.patagonia['images']['amenities'])
+        )
+
+        # assert get field images.site from paperflies if patagonia and acme has not it
+        self.assertLessEqual(
+            len(result['images']['site']),
+            len(self.paperflies['images']['site'])
+        )

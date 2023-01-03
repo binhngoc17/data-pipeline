@@ -4,16 +4,36 @@
 pip install -r requirements.txt
 ```
 
-## Run
+## Run scipt merge data
 
 ```
-python main.pt
+python main.py
+```
+
+## Run Flask server
+
+```
+flask --app app run
+```
+
+### API document
+
+- Api filter by hotel ids
+
+```
+GET /hotels?hotel_ids=SjyX,f8c9
+```
+
+- Api filter by destination id
+
+```
+GET /destinations/5432
 ```
 
 ## Test
 
 ```
-python -m coverage run -m unittest merger\test_trust_source_merger.py -v
+python -m coverage run -m unittest test -v
 ```
 
 ### Report coverage testing
