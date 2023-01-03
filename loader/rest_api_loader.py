@@ -20,7 +20,6 @@ class JSONApiLoader:
     def save(self, store):
         data = self.get_data()
         store.save_raw_data(store.raw_data_table, data)
-
         return data
 
 

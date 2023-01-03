@@ -1,6 +1,3 @@
-# acme > paperflies > paperflies
-
-
 class TrustSourceMerger:
     def __init__(self, rule):
         self.rule = rule

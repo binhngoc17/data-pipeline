@@ -1,10 +1,13 @@
+"""
+This class is one of the store; we can implement other store solutions
+"""
 import psycopg2
 from psycopg2 import sql
-from typing import TypedDict
+from typing import NamedTuple
 import json
 
 
-class PostgresConfig(TypedDict):
+class PostgresConfig(NamedTuple):
     host: str
     db: str
     user: str

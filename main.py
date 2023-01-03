@@ -3,7 +3,7 @@ from loader.rest_api_loader import (
     patagonia_data_loader,
     paperflies_data_loader,
 )
-from transformer.field_transformer import FieldTransformer
+from transformer.field_transformer import acme_transformer, paperflies_transformer, patagonia_transformer
 from merger.trust_source_merger import TrustSourceMerger
 from store.postgres import Postgres
 import json
@@ -25,60 +25,17 @@ postgres = Postgres(
     }
 )
 
-acme_data = acme_data_loader.save(postgres)
-transformer_acme = FieldTransformer(
-    acme_data,
-    {
-        "Id": "id",
-        "DestinationId": "destination_id",
-        "Name": "name",
-        "Latitude": "location.lat",
-        "Longitude": "location.lng",
-        "Address": "location.address",
-        "City": "location.city",
-        "Country": "location.country",
-        "PostalCode": "postal_code",
-        "Description": "description",
-        "Facilities": "amenities.general",
-    },
-).save(postgres)
+raw_acme_data = acme_data_loader.save(postgres)
+transformed_acme_data = acme_transformer.convert(raw_acme_data)
 
-patagonia_data = patagonia_data_loader.save(postgres)
-transformer_patagonia = FieldTransformer(
-    patagonia_data,
-    {
-        "id": "id",
-        "destination": "destination_id",
-        "name": "name",
-        "lat": "location.lat",
-        "lng": "location.lng",
-        "address": "location.address",
-        "info": "description",
-        "amenities": "amenities.room",
-        "images.rooms.url": "images.rooms.link",
-        "images.amenities.url": "images.amenities.link",
-    },
-).save(postgres)
+raw_patagonia_data = patagonia_data_loader.save(postgres)
+transformed_patagonia_data = patagonia_transformer.convert(raw_patagonia_data)
+
+raw_paperflies_data = paperflies_data_loader.save(postgres)
+transformed_paperflies_data = paperflies_transformer.convert(raw_paperflies_data)
 
 
-paperflies_data = paperflies_data_loader.save(postgres)
-transformer_paperflies = FieldTransformer(
-    paperflies_data,
-    {
-        "hotel_id": "id",
-        "destination_id": "destination_id",
-        "hotel_name": "name",
-        "location": "location",
-        "details": "description",
-        "amenities": "amenities",
-        "images.rooms.caption": "images.rooms.description",
-        "images.site.caption": "images.site.description",
-        "booking_conditions": "booking_conditions"
-    },
-).save(postgres)
-
-
-for acme in transformer_acme:
+for acme in transformed_acme_data:
     trust_source_merger = TrustSourceMerger(
         {
             "id": "",
@@ -95,9 +52,9 @@ for acme in transformer_acme:
             "booking_conditions": [],
         }
     )
-    patagonia = next((x for x in transformer_patagonia if acme["id"] == x["id"]), None)
+    patagonia = next((x for x in transformed_patagonia_data if acme["id"] == x["id"]), None)
     paperflies = next(
-        (x for x in transformer_paperflies if acme["id"] == x["id"]), None
+        (x for x in transformed_paperflies_data if acme["id"] == x["id"]), None
     )
 
     print("======================")
